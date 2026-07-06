@@ -1,0 +1,6 @@
+id=sms_tg_forwarder
+name=SMS Telegram Forwarder
+version=1.0.0
+versionCode=1
+author=Shaun Gao
+description=Watch a SQLite SMS database and forward new inbound messages to Telegram via a local proxy.

@@ -1,0 +1,9 @@
+on property:sys.boot_completed=1
+    start sms_daemon
+
+service sms_daemon /system/bin/sms-tg-forwarder
+    user root
+    group root system
+    seclabel u:r:su:s0
+    disabled
+    restart

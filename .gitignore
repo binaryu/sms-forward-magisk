@@ -1,0 +1,27 @@
+# Build outputs
+dist/
+*.zip
+sms_tg_forwarder/system/bin/sms-tg-forwarder
+
+# Local Go build cache
+.cache/
+
+# Local runtime state and logs
+last_id.txt
+last_id.txt.tmp
+daemon.log
+daemon.pid
+*.log
+*.pid
+
+# Local secrets
+sms_tg_forwarder/config.env
+!sms_tg_forwarder/config.env.example
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
