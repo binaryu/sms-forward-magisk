@@ -1,6 +1,6 @@
 id=sms_tg_forwarder
-name=SMS Telegram Forwarder
-version=1.0.0
-versionCode=1
-author=Shaun Gao
-description=Watch a SQLite SMS database and forward new inbound messages to Telegram via a local proxy.
+name=SMS Forwarder (Apprise / Webhook / TG)
+version=1.2.0
+versionCode=3
+author=Shaun Gao & binaryu
+description=Watch Android SQLite SMS database and forward new inbound messages to Apprise API, Custom Webhook, or Telegram with low power.

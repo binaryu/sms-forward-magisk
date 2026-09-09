@@ -39,7 +39,7 @@ module:
 	cp $(TARGET) $(MAGISK_MODULE_DIR)/system/bin/$(APP)
 	chmod 755 $(MAGISK_MODULE_DIR)/system/bin/$(APP)
 	chmod 755 $(MAGISK_MODULE_DIR)/service.sh $(MAGISK_MODULE_DIR)/uninstall.sh
-	chmod 600 $(MAGISK_MODULE_DIR)/config.env
+	test -f $(MAGISK_MODULE_DIR)/config.env && chmod 600 $(MAGISK_MODULE_DIR)/config.env || true
 
 magisk: module
 	mkdir -p $(DIST_DIR)
