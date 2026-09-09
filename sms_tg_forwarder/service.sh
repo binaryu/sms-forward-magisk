@@ -6,6 +6,7 @@ MODDIR=${0%/*}
 
 DATA_DIR=/data/adb/sms_tg_forwarder
 CONFIG_FILE="$MODDIR/config.env"
+[ ! -f "$CONFIG_FILE" ] && [ -f "$DATA_DIR/config.env" ] && CONFIG_FILE="$DATA_DIR/config.env"
 LOG_FILE="$MODDIR/daemon.log"
 PID_FILE="$DATA_DIR/daemon.pid"
 BINARY="$MODDIR/system/bin/sms-tg-forwarder"
@@ -19,13 +20,33 @@ ln -sf "$LOG_FILE" "$DATA_DIR/daemon.log" 2>/dev/null
 
 echo "$(date '+%Y-%m-%d %H:%M:%S') [service.sh] Service starting..." >> "$LOG_FILE"
 
+# 环境检测与软链接保障
+if [ "$KSU" = "true" ]; then
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [service.sh] Environment: KernelSU (KSU_VER: ${KSU_VER:-unknown}, KSU_KERNEL_VER_CODE: ${KSU_KERNEL_VER_CODE:-unknown})" >> "$LOG_FILE"
+  if [ -d "/data/adb/ksu/bin" ]; then
+    ln -sf "$BINARY" "/data/adb/ksu/bin/sms-tg-forwarder" 2>/dev/null
+  fi
+elif [ -n "$APATCH" ]; then
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [service.sh] Environment: APatch" >> "$LOG_FILE"
+elif [ -n "$MAGISK_VER" ]; then
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [service.sh] Environment: Magisk (MAGISK_VER: $MAGISK_VER)" >> "$LOG_FILE"
+else
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [service.sh] Environment: Generic Root" >> "$LOG_FILE"
+fi
+
+# 扩展 PATH 环境变量以包含 KernelSU 与 Magisk 工具
+export PATH="/data/adb/ksu/bin:/data/adb/ap/bin:/data/adb/magisk:/system/bin:/system/xbin:$PATH"
+
 # 等待开机完成
 while [ "$(getprop sys.boot_completed 2>/dev/null)" != "1" ]; do
   sleep 2
 done
 
-# 等待用户解锁解密存储 (/data/data)
+# 等待用户解锁解密存储 (/data/data)，并增加短信与通话数据库目录探测兜底
 while [ "$(getprop sys.user.0.ce_available 2>/dev/null)" != "true" ]; do
+  [ -d "/data/data/com.android.providers.telephony/databases" ] && break
+  [ -d "/data/user/0/com.android.providers.telephony/databases" ] && break
+  [ -d "/data/data/com.android.providers.contacts/databases" ] && break
   sleep 2
 done
 
@@ -44,10 +65,11 @@ if [ -f "$CONFIG_FILE" ]; then
   eval "$(tr -d '\r' < "$CONFIG_FILE" | grep -v '^[[:space:]]*#' | grep '=')"
 fi
 
-echo "$(date '+%Y-%m-%d %H:%M:%S') [service.sh] Loaded config: APPRISE_URL=$APPRISE_URL, WEBHOOK_URL=$WEBHOOK_URL, TG_BOT=${TELEGRAM_BOT_TOKEN:0:5}***" >> "$LOG_FILE"
+echo "$(date '+%Y-%m-%d %H:%M:%S') [service.sh] Loaded config: BARK=${BARK_KEY:0:4}***, WECHAT=${WECHAT_WEBHOOK:0:30}***, APPRISE=$APPRISE_URL, WEBHOOK=$WEBHOOK_URL, TG_BOT=${TELEGRAM_BOT_TOKEN:0:5}***" >> "$LOG_FILE"
 
-if [ -z "$APPRISE_URL" ] && [ -z "$WEBHOOK_URL" ] && { [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; }; then
-  echo "$(date '+%Y-%m-%d %H:%M:%S') [service.sh] ERROR: Missing APPRISE_URL, WEBHOOK_URL or (TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID) in $CONFIG_FILE" >> "$LOG_FILE"
+# 检查是否至少配置了一个通道
+if [ -z "$BARK_KEY" ] && [ -z "$WECHAT_WEBHOOK" ] && [ -z "$WX_WEBHOOK" ] && [ -z "$APPRISE_URL" ] && [ -z "$WEBHOOK_URL" ] && { [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; }; then
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [service.sh] ERROR: No notification channel configured in $CONFIG_FILE" >> "$LOG_FILE"
   exit 0
 fi
 
@@ -66,6 +88,20 @@ TZ_PROP=$(getprop persist.sys.timezone 2>/dev/null)
 export TZ="$TZ_PROP"
 
 export CONFIG_FILE="$CONFIG_FILE"
+
+# Bark
+export BARK_KEY
+export BARK_SERVER
+export BARK_GROUP
+export BARK_SOUND
+export BARK_ICON
+export BARK_USE_PROXY
+
+# 企业微信
+export WECHAT_WEBHOOK
+export WECHAT_USE_PROXY
+
+# Apprise
 export APPRISE_URL
 export APPRISE_URLS
 export APPRISE_TITLE
@@ -73,26 +109,33 @@ export APPRISE_TYPE
 export APPRISE_FORMAT
 export APPRISE_USE_PROXY
 
+# 通用 Webhook
 export WEBHOOK_URL
 export WEBHOOK_METHOD
 export WEBHOOK_HEADERS
 export WEBHOOK_BODY
 export WEBHOOK_USE_PROXY
 
+# Telegram
 export TELEGRAM_BOT_TOKEN
 export TELEGRAM_CHAT_ID
+
+# 通话记录 (未接来电)
+export ENABLE_CALL_FORWARD
+export CALL_DB_PATH
+export CALL_FORWARD_TYPES
+export LAST_CALL_PATH
+export LAST_CALL_ID_PATH
+
+# 网络与底层
 export PROXY_URL
+export DNS_SERVER
 export CA_CERT_DIR
 export CA_CERT_FILE
 export TLS_INSECURE_SKIP_VERIFY
-
-if [ -n "$DB_PATH" ]; then
-  export DB_PATH
-fi
-
-if [ -n "$LAST_ID_PATH" ]; then
-  export LAST_ID_PATH
-fi
+export DB_PATH
+export LAST_MSG_PATH
+export LAST_ID_PATH
 
 echo "$(date '+%Y-%m-%d %H:%M:%S') [service.sh] Launching daemon: $BINARY" >> "$LOG_FILE"
 "$BINARY" >> "$LOG_FILE" 2>&1 &

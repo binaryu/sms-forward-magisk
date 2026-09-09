@@ -9,15 +9,16 @@ umask 022
 # echo before loading util_functions
 ui_print() { echo "$1"; }
 
-require_new_magisk() {
-  ui_print "*******************************"
-  ui_print " Please install Magisk v20.4+! "
-  ui_print "*******************************"
+require_root_env() {
+  ui_print "*****************************************"
+  ui_print " 请使用 Magisk v20.4+ 或 KernelSU 安装本模块！"
+  ui_print " Please install with Magisk v20.4+ or KernelSU! "
+  ui_print "*****************************************"
   exit 1
 }
 
 #########################
-# Load util_functions.sh
+# Load installer
 #########################
 
 OUTFD=$2
@@ -25,9 +26,19 @@ ZIPFILE=$3
 
 mount /data 2>/dev/null
 
-[ -f /data/adb/magisk/util_functions.sh ] || require_new_magisk
-. /data/adb/magisk/util_functions.sh
-[ $MAGISK_VER_CODE -lt 20400 ] && require_new_magisk
-
-install_module
-exit 0
+if [ -f /data/adb/magisk/util_functions.sh ]; then
+  . /data/adb/magisk/util_functions.sh
+  [ "$MAGISK_VER_CODE" -lt 20400 ] && require_root_env
+  install_module
+  exit 0
+elif [ -x /data/adb/ksud ]; then
+  ui_print "- Detected KernelSU environment"
+  /data/adb/ksud module install "$ZIPFILE"
+  exit $?
+elif [ -x /data/adb/ap/bin/apd ]; then
+  ui_print "- Detected APatch environment"
+  /data/adb/ap/bin/apd module install "$ZIPFILE"
+  exit $?
+else
+  require_root_env
+fi

@@ -1,0 +1,110 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - main
+    paths:
+      - 'sms_tg_forwarder/**'
+      - 'Makefile'
+      - '.github/workflows/**'
+  pull_request:
+    paths:
+      - 'sms_tg_forwarder/**'
+      - 'Makefile'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag (e.g. v1.4.0)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          cache-dependency-path: sms_tg_forwarder/src/go.sum
+
+      - name: Run Tests
+        run: |
+          make test
+
+  build-and-release:
+    name: Build and Release
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          cache-dependency-path: sms_tg_forwarder/src/go.sum
+
+      - name: Install zip
+        run: |
+          sudo apt-get update && sudo apt-get install -y zip
+
+      - name: Build Module Package
+        run: |
+          make clean
+          make zip
+
+      - name: Generate Checksums
+        run: |
+          cd dist
+          sha256sum sms_tg_forwarder-arm64.zip > sha256sum.txt
+          cat sha256sum.txt
+
+      - name: Extract Metadata
+        id: meta
+        run: |
+          VERSION=$(grep '^version=' sms_tg_forwarder/module.prop | cut -d'=' -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          TAG="${{ github.event.inputs.tag_name }}"
+          if [ -z "$TAG" ]; then
+            TAG="${{ github.ref_name }}"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: SMS & Call Forwarder ${{ steps.meta.outputs.tag }} (v${{ steps.meta.outputs.version }})
+          files: |
+            dist/sms_tg_forwarder-arm64.zip
+            dist/sha256sum.txt
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## SMS & Call Forwarder 模块更新
+
+            ### 产物下载
+            - **Magisk / KernelSU / APatch 通用刷入包**：`sms_tg_forwarder-arm64.zip`
+            - **校验文件**：`sha256sum.txt`
+
+            ### 安装方式
+            1. 打开 **KernelSU 管理器** 或 **Magisk App**。
+            2. 点击「模块」->「安装」选择 `sms_tg_forwarder-arm64.zip` 刷入。
+            3. 重启手机。
+            4. 编辑 `/data/adb/modules/sms_tg_forwarder/config.env` 配置推送通道。

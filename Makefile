@@ -2,9 +2,9 @@ APP ?= sms-tg-forwarder
 MODULE ?= sms-tg-forwarder
 DIST_DIR ?= dist
 TARGET ?= $(DIST_DIR)/$(APP)-linux-arm64
-MAGISK_MODULE_DIR ?= sms_tg_forwarder
-MAGISK_ZIP ?= $(DIST_DIR)/sms_tg_forwarder-magisk-arm64.zip
-SRC_DIR ?= $(MAGISK_MODULE_DIR)/src
+MODULE_DIR ?= sms_tg_forwarder
+MODULE_ZIP ?= $(DIST_DIR)/sms_tg_forwarder-arm64.zip
+SRC_DIR ?= $(MODULE_DIR)/src
 
 GO ?= go
 GOOS ?= linux
@@ -15,7 +15,7 @@ GOCACHE ?= $(CURDIR)/.cache/go-build
 BUILD_TAGS ?= netgo osusergo sqlite_omit_load_extension
 LDFLAGS ?= -s -w -extldflags "-static"
 
-.PHONY: all build arm64 bootstrap clean deps tidy run module magisk
+.PHONY: all build arm64 bootstrap clean deps tidy run test module magisk ksu zip
 
 all: build
 
@@ -33,19 +33,25 @@ arm64:
 		.
 	file $(TARGET) || true
 
-module:
-	test -f $(TARGET) || $(MAKE) arm64
-	mkdir -p $(MAGISK_MODULE_DIR)/system/bin
-	cp $(TARGET) $(MAGISK_MODULE_DIR)/system/bin/$(APP)
-	chmod 755 $(MAGISK_MODULE_DIR)/system/bin/$(APP)
-	chmod 755 $(MAGISK_MODULE_DIR)/service.sh $(MAGISK_MODULE_DIR)/uninstall.sh
-	test -f $(MAGISK_MODULE_DIR)/config.env && chmod 600 $(MAGISK_MODULE_DIR)/config.env || true
+test:
+	cd $(SRC_DIR) && GOCACHE=$(GOCACHE) $(GO) test -v ./...
 
-magisk: module
+module: arm64
+	mkdir -p $(MODULE_DIR)/system/bin
+	cp $(TARGET) $(MODULE_DIR)/system/bin/$(APP)
+	chmod 755 $(MODULE_DIR)/system/bin/$(APP)
+	chmod 755 $(MODULE_DIR)/service.sh $(MODULE_DIR)/uninstall.sh
+	test -f $(MODULE_DIR)/action.sh && chmod 755 $(MODULE_DIR)/action.sh || true
+	test -f $(MODULE_DIR)/config.env && chmod 600 $(MODULE_DIR)/config.env || true
+
+zip: module
 	mkdir -p $(DIST_DIR)
-	rm -f $(MAGISK_ZIP)
-	cd $(MAGISK_MODULE_DIR) && zip -r ../$(MAGISK_ZIP) . -x 'src/*'
-	ls -lh $(MAGISK_ZIP)
+	rm -f $(MODULE_ZIP)
+	cd $(MODULE_DIR) && zip -r ../$(MODULE_ZIP) . -x 'src/*'
+	ls -lh $(MODULE_ZIP)
+
+magisk: zip
+ksu: zip
 
 bootstrap:
 	cd $(SRC_DIR) && { test -f go.mod || $(GO) mod init $(MODULE); }
